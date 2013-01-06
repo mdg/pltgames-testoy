@@ -5,6 +5,7 @@ reserved = {
     'if': 'IF',
     'else': 'ELSE',
     'elsif': 'ELSIF',
+    'end': 'END',
     'func': 'FUNC',
     'while': 'WHILE',
     'foreach': 'FOREACH',
@@ -16,20 +17,23 @@ tokens = [
     'ARROWL',
     'PARENL',
     'PARENR',
+    'COMMA',
     'PLUS',
     'MINUS',
     'TIMES',
     'DIVIDE',
+    'NEWLINE',
 ] + list(reserved.values())
 
 
 t_ARROWL = r'<\-'
-t_PLUS = r'\+'
+t_COMMA = r','
+t_DIVIDE = r'/'
 t_MINUS = r'\-'
 t_PARENL = r'\('
 t_PARENR = r'\)'
+t_PLUS = r'\+'
 t_TIMES = r'\*'
-t_DIVIDE = r'/'
 
 
 def t_NUMBER(t):
@@ -42,9 +46,10 @@ def t_ID(t):
     t.type = reserved.get(t.value, 'ID')
     return t
 
-def t_newline(t):
+def t_NEWLINE(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
+    return t
 
 t_ignore = ' \t'
 
@@ -54,18 +59,89 @@ def t_error(t):
 
 
 
-class FunctionCall:
-    def __init__(self, id):
+class FunctionDef:
+    def __init__(self, id, args, stmts):
         self.name = id
+        self.args = args
+        self.code = stmts
+
+    def __repr__(self):
+        r = "func:%s(" % self.name
+        first = True
+        for a in self.args:
+            if not first:
+                r += ","
+            else:
+                first = False
+            r += a
+        r += ")"
+        return r
+
+class AssignStmt:
+    def __init__(self, id, expr):
+        self.dst = id
+        self.src = expr
+
+class FunctionCall:
+    def __init__(self, id, args):
+        self.name = id
+        self.args = args
 
     def __trunc__(self):
-        return 15
+        sum = 0
+        for arg in self.args:
+            sum += arg
+        return sum
 
+
+start = 'program'
 
 precedence = (
     ('left', 'PLUS', 'MINUS'),
     ('left', 'TIMES', 'DIVIDE'),
 )
+
+
+def p_program(p):
+    'program : topstmts'
+    p[0] = p[1]
+
+def p_topstmts_first(p):
+    'topstmts : topstmt'
+    p[0] = [p[1]]
+
+def p_topstmts_more(p):
+    'topstmts : topstmts topstmt'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+def p_topstmt_func(p):
+    'topstmt : FUNC ID PARENL optcallargs PARENR NEWLINE code END NEWLINE'
+    p[0] = FunctionDef(p[2], p[4], p[6])
+
+def p_code_first(p):
+    'code : stmteol'
+    p[0] = [p[1]]
+
+def p_code_more(p):
+    'code : code stmteol'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+
+def p_stmteol(p):
+    'stmteol : stmt NEWLINE'
+    p[0] = p[1]
+
+def p_stmt_assign(p):
+    'stmt : ID ARROWL expr'
+    p[0] = AssignStmt(p[1], p[3])
+    print 'found assign stmt'
+
+
+def p_empty(p):
+    'empty :'
+    pass
 
 def p_expr_negation(p):
     'expr : MINUS expr'
@@ -76,8 +152,26 @@ def p_expr_parened(p):
     p[0] = p[2]
 
 def p_expr_functioncall(p):
-    'expr : ID PARENL PARENR'
-    p[0] = FunctionCall(p[1])
+    'expr : ID PARENL optcallargs PARENR'
+    p[0] = FunctionCall(p[1], p[3])
+
+def p_optcallargs_notempty(p):
+    'optcallargs : callargs'
+    p[0] = p[1]
+
+def p_optcallargs_empty(p):
+    'optcallargs : empty'
+    p[0] = []
+
+def p_callargs_first(p):
+    'callargs : expr'
+    p[0] = [p[1]]
+    print "found callargs: %s" % p[1]
+
+def p_callargs_more(p):
+    'callargs : callargs COMMA expr'
+    p[0] = p[1]
+    p[0].append(p[3])
 
 def p_expr_plusminus(p):
     '''expr : expr PLUS expr 
@@ -106,8 +200,11 @@ def p_expr_number(p):
     p[0] = p[1]
 
 def p_error(p):
-    print "parse error\n"
+    print "parse error: %s" % str(p)
 
+
+def interpret(program):
+    f
 
 
 data = '''
@@ -115,18 +212,28 @@ data = '''
   + -20 *2 <-
 '''
 
-plus_data = "4 + 24 / ( 5 + 3 ) - f()"
+plus_data = "sum(9,3) + 24 / ( 5 + 3 ) - f(5)"
+
+sample1 = '''func main(tacos)
+    x <- 5
+end
+'''
 
 
 lex.lex()
 
-do_parse = True
-if do_parse:
+cmd = 'p'
+if cmd == 'x':
     parser = yacc.yacc()
-    result = parser.parse(plus_data)
+    ast = parser.parse(sample1)
+    program = compile(ast)
+    interpret(program)
+elif cmd == 'p':
+    parser = yacc.yacc()
+    result = parser.parse(sample1)
     print result
 else:
-    lex.input(plus_data)
+    lex.input(sample1)
     while True:
         tok = lex.token()
         if not tok:
