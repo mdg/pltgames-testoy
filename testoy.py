@@ -1,5 +1,6 @@
 import ply.lex as lex
 import ply.yacc as yacc
+import sys
 
 reserved = {
     'if': 'IF',
@@ -387,10 +388,24 @@ func main(tacos)
 end
 '''
 
-
 lex.lex()
 
+if len(sys.argv) != 2:
+    print "running internal sample program"
+    program_file = None
+else:
+    program_file = sys.argv[1]
+
+
+
 cmd = 'x'
+if program_file is not None:
+    parser = yacc.yacc()
+    with open(program_file) as f:
+        input = f.read()
+    progcode = parser.parse(input)
+    program = Program(progcode)
+    print program.call_function('main', [5])
 if cmd == 'x':
     parser = yacc.yacc()
     progcode = parser.parse(sample1)
