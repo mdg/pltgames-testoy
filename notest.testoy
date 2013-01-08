@@ -1,0 +1,10 @@
+func twice(n)
+    return n * 3
+end
+
+func main(tacos)
+    x <- twice(tacos)
+    y <- x + 7
+    print(y)
+    return y
+end

@@ -235,25 +235,17 @@ def p_stmt_assign(p):
     'stmt : ID ARROWL expr'
     p[0] = AssignStmt(p[1], p[3])
 
+def p_stmt_expr(p):
+    'stmt : expr'
+    p[0] = ReturnStmt(p[1])
+
 def p_stmt_return(p):
     'stmt : RETURN expr'
     p[0] = ReturnStmt(p[2])
 
 
-def p_empty(p):
-    'empty :'
-    p[0] = []
-
-def p_expr_negation(p):
-    'expr : MINUS expr'
-    p[0] = - p[2]
-
-def p_expr_parened(p):
-    'expr : PARENL expr PARENR'
-    p[0] = p[2]
-
-def p_expr_functioncall(p):
-    'expr : ID PARENL optcallargs PARENR'
+def p_functioncall(p):
+    'functioncall : ID PARENL optcallargs PARENR'
     p[0] = FunctionCall(p[1], p[3])
 
 def p_optcallargs(p):
@@ -269,6 +261,23 @@ def p_callargs_more(p):
     'callargs : callargs COMMA expr'
     p[0] = p[1]
     p[0].append(p[3])
+
+def p_empty(p):
+    'empty :'
+    p[0] = []
+
+
+def p_expr_negation(p):
+    'expr : MINUS expr'
+    p[0] = - p[2]
+
+def p_expr_parened(p):
+    'expr : PARENL expr PARENR'
+    p[0] = p[2]
+
+def p_expr_functioncall(p):
+    'expr : functioncall'
+    p[0] = p[1]
 
 def p_expr_plusminus(p):
     '''expr : expr PLUS expr 
@@ -300,6 +309,12 @@ def p_error(p):
     print "parse error: %s" % str(p)
 
 
+def builtin_print(val):
+    print val
+
+BUILTINS = [builtin_print]
+
+
 class CallFrame:
     def __init__(self, funcdef, args):
         self.name = funcdef.name
@@ -314,22 +329,29 @@ class Program:
         self.callstack = []
 
     def call_function(self, fname, args):
-        self._push_function(fname, args)
-        result = self.run()
+        f = self._find_function(fname)
+        if f.__class__.__name__ == 'function':
+            return f(*args)
+        self._push_function(f, args)
+        result = self._run()
         self.callstack.pop(-1)
         return result
 
-    def find_function(self, fname):
+    def _find_function(self, fname):
         for s in self.prog:
             if s.__class__.__name__ == 'FunctionDef':
                 if s.name == fname:
                     return s
+        builtin_name = "builtin_%s" % (fname)
+        for f in BUILTINS:
+            if f.__name__ == builtin_name:
+                return f
+            print "found %s" % f.__name__
         return None
 
-    def _push_function(self, fname, args):
+    def _push_function(self, f, args):
         if args is None:
             args = []
-        f = self.find_function(fname)
         passed_argc = len(args)
         if passed_argc != len(f.args):
             print "function arg mismatch"
@@ -343,7 +365,7 @@ class Program:
             self.set_local(name, val)
             i += 1
 
-    def run(self):
+    def _run(self):
         frame = self.callstack[-1]
         for i in frame.code:
             i.execute(self)
@@ -371,23 +393,6 @@ class Program:
                 print "Unknown Statement: %s" % str(s)
 
 
-data = '''
-3 + if 4 * 10
-  + -20 *2 <-
-'''
-
-plus_data = "sum(9,3) + 24 / ( 5 + 3 ) - f(5)"
-
-sample1 = '''func twice(n)
-    return n * 2
-end
-
-func main(tacos)
-    x <- twice(tacos)
-    return x + 4
-end
-'''
-
 lex.lex()
 
 if len(sys.argv) != 2:
@@ -405,8 +410,8 @@ if program_file is not None:
         input = f.read()
     progcode = parser.parse(input)
     program = Program(progcode)
-    print program.call_function('main', [5])
-if cmd == 'x':
+    program.call_function('main', [5])
+elif cmd == 'x':
     parser = yacc.yacc()
     progcode = parser.parse(sample1)
     program = Program(progcode)
