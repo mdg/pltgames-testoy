@@ -7,16 +7,19 @@ reserved = {
     'else': 'ELSE',
     'elsif': 'ELSIF',
     'end': 'END',
-    'func': 'FUNC',
-    'return': 'RETURN',
-    'while': 'WHILE',
     'foreach': 'FOREACH',
+    'func': 'FUNC',
+    'given': 'GIVEN',
+    'return': 'RETURN',
+    'test': 'TEST',
+    'while': 'WHILE',
 }
 
 tokens = [
     'ID',
     'NUMBER',
     'ARROWL',
+    'ARROWR',
     'PARENL',
     'PARENR',
     'COMMA',
@@ -29,6 +32,7 @@ tokens = [
 
 
 t_ARROWL = r'<\-'
+t_ARROWR = r'\->'
 t_COMMA = r','
 t_DIVIDE = r'/'
 t_MINUS = r'\-'
@@ -109,6 +113,16 @@ class MultExpr(BinaryExpr):
     def operator_string(self):
         return '*'
 
+class NegativeExpr:
+    def __init__(self, op):
+        self.x = op
+
+    def evaluate(self, prog):
+        return -self.x.evaluate(prog)
+
+    def __repr__(self):
+        return "-%s" % str(self.x)
+
 
 class FunctionDef:
     def __init__(self, id, args, stmts):
@@ -132,7 +146,6 @@ class FunctionDef:
         print str(self)
         for i in self.code:
             print "\t%s" % str(i)
-
 
 class AssignStmt:
     def __init__(self, id, expr):
@@ -176,6 +189,26 @@ class FunctionCall:
 
     def __repr__(self):
         return "FunctionCall"
+
+class TestDef:
+    def __init__(self, id, cases):
+        self.function = id
+        self.cases = cases
+
+    def run(self, prog):
+        for values in self.cases:
+            args = [a.evaluate(prog) for a in values[0:-1]]
+            result = values[-1].evaluate(prog)
+            actual = prog.call_function(self.function, args)
+            if result == actual:
+                sys.stdout.write('.')
+            else:
+                sys.stdout.write('F')
+                print(' %s = %s' % (result, actual))
+                print(' %s = %s' % (result.__class__.__name__,
+                    actual.__class__.__name__))
+                print "call(%s) = %s" % (str(args), str(actual))
+        print ''
 
 
 start = 'program'
@@ -226,7 +259,6 @@ def p_code_more(p):
     p[0] = p[1]
     p[0].append(p[2])
 
-
 def p_stmteol(p):
     'stmteol : stmt NEWLINE'
     p[0] = p[1]
@@ -242,6 +274,29 @@ def p_stmt_expr(p):
 def p_stmt_return(p):
     'stmt : RETURN expr'
     p[0] = ReturnStmt(p[2])
+
+
+def p_topstmt_test(p):
+    'topstmt : TEST ID GIVEN NEWLINE testcases END NEWLINE'
+    p[0] = TestDef(p[2], p[5])
+
+def p_testcases_first(p):
+    'testcases : testcase NEWLINE'
+    p[0] = [p[1]]
+
+def p_testcases_more(p):
+    'testcases : testcases testcase NEWLINE'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+def p_testcase_first(p):
+    'testcase : expr ARROWR expr'
+    p[0] = [p[1], p[3]]
+
+def p_testcase_more(p):
+    'testcase : testcase ARROWR expr'
+    p[0] = p[1]
+    p[0].append(p[3])
 
 
 def p_functioncall(p):
@@ -269,7 +324,7 @@ def p_empty(p):
 
 def p_expr_negation(p):
     'expr : MINUS expr'
-    p[0] = - p[2]
+    p[0] = NegativeExpr(p[2])
 
 def p_expr_parened(p):
     'expr : PARENL expr PARENR'
@@ -337,6 +392,12 @@ class Program:
         self.callstack.pop(-1)
         return result
 
+    def run_tests(self):
+        for s in self.prog:
+            if s.__class__ == TestDef:
+                print "run test: %s" % (s.function)
+                s.run(self)
+
     def _find_function(self, fname):
         for s in self.prog:
             if s.__class__.__name__ == 'FunctionDef':
@@ -395,16 +456,26 @@ class Program:
 
 lex.lex()
 
-if len(sys.argv) != 2:
-    print "running internal sample program"
-    program_file = None
-else:
-    program_file = sys.argv[1]
-
-
 
 cmd = 'x'
-if program_file is not None:
+if len(sys.argv) == 3 and sys.argv[1] == 'test':
+    cmd = 'test'
+    program_file = sys.argv[2]
+elif len(sys.argv) == 2:
+    program_file = sys.argv[1]
+else:
+    print "running internal sample program"
+    program_file = None
+
+
+if program_file is not None and cmd == 'test':
+    parser = yacc.yacc()
+    with open(program_file) as f:
+        input = f.read()
+    progcode = parser.parse(input)
+    program = Program(progcode)
+    program.run_tests()
+elif program_file is not None:
     parser = yacc.yacc()
     with open(program_file) as f:
         input = f.read()
