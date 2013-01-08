@@ -1,0 +1,75 @@
+func twice(n)
+    return n * 2
+end
+
+func main(tacos)
+    x <- twice(tacos)
+    return x + 4
+end
+
+testfunc checkit(a)
+    return a * 2
+end
+
+
+// simplest test for a function
+// give the function name, then a set of inputs and their outputs
+test twice given
+	4 -> 8
+	-1 -> -2
+	0 -> 0
+end
+
+// Given is the keyword for building permutations
+test twice.random
+    given x <- repeat(10, random, -100, 100)
+    randomize x <- 
+    2 * x = twice(x)
+end
+
+// Given x is every value within a range
+// Runs once for each combination of given values
+test product
+	given a <- range(-10, 10)
+	given b <- range(-10, 10)
+	a * b = product(a, b)
+end
+
+// define a set of test data
+testdata twice_testdata provide
+	 8  4
+	-2 -1
+	 0  0
+end
+
+// manually generated test data above
+test provide_twice
+	given expected, input <- twice_testdata
+	expected = twice(input)
+end
+
+// given two function names, execute them sequentially on the given input
+// and verify that the original result is the same
+test multiply_inverse_divide
+	given x <- repeat(10, random, -100, 100)
+	given y <- repeat(10, random, -100, 100)
+	given z <- repeat(10, random, -100, 100)
+	z = multiply(x, y)
+	y = divide(z, x)
+	z = divide(z, y)
+end
+
+test twice_layout "actually doubles?"
+    y <- twice(7)
+    14 = y
+end
+
+test twice(expected, input)
+    actual <- twice(input)
+    expected = actual
+withdata
+7 14
+-5 -10
+8 16
+end
+
