@@ -388,20 +388,13 @@ def p_endblock(p):
     pass
 
 
+## Expressions
 def p_expr_negation(p):
     'expr : MINUS expr'
     p[0] = NegativeExpr(p[2])
 
 def p_expr_term(p):
     'expr : term'
-    p[0] = p[1]
-
-def p_term_parened(p):
-    'term : PARENL expr PARENR'
-    p[0] = p[2]
-
-def p_term_functioncall(p):
-    'expr : functioncall'
     p[0] = p[1]
 
 def p_expr_plusminus(p):
@@ -420,6 +413,16 @@ def p_expr_times(p):
 def p_expr_divide(p):
     'expr : expr DIVIDE expr'
     p[0] = DivideExpr(p[1], p[3])
+
+
+## Terms
+def p_term_parened(p):
+    'term : PARENL expr PARENR'
+    p[0] = p[2]
+
+def p_term_functioncall(p):
+    'expr : functioncall'
+    p[0] = p[1]
 
 def p_term_id(p):
     'term : ID'
