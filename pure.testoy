@@ -9,8 +9,13 @@ func main(tacos)
     return y
 end
 
-test divide given
+puretest divide given
 	8 -> 2 -> 4
 	-10 -> 5 -> 2
 	21 -> -3 -> -7
+end
+
+purefail divide given
+	8 -> 0
+	-23 -> 0
 end

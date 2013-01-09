@@ -9,7 +9,7 @@ func main(tacos)
     return y
 end
 
-test thrice given
+puretest thrice given
 	4 -> 12
 	-1 -> -3
 	0 -> 0

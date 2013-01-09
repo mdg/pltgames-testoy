@@ -12,14 +12,6 @@ testfunc checkit(a)
 end
 
 
-// simplest test for a function
-// give the function name, then a set of inputs and their outputs
-test twice given
-	4 -> 8
-	-1 -> -2
-	0 -> 0
-end
-
 // Given is the keyword for building permutations
 test twice.random
     given x <- repeat(10, random, -100, 100)

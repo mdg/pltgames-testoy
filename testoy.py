@@ -7,11 +7,13 @@ reserved = {
     'else': 'ELSE',
     'elsif': 'ELSIF',
     'end': 'END',
+    'failure': 'FAILURE',
     'foreach': 'FOREACH',
     'func': 'FUNC',
     'given': 'GIVEN',
+    'purefail': 'PUREFAIL',
+    'puretest': 'PURETEST',
     'return': 'RETURN',
-    'test': 'TEST',
     'while': 'WHILE',
 }
 
@@ -198,11 +200,15 @@ class FunctionCall:
         return "FunctionCall"
 
 class TestDef:
+    pass
+
+class PureTestDef(TestDef):
     def __init__(self, id, cases):
         self.function = id
         self.cases = cases
 
     def run(self, prog):
+        print "puretest: %s" % (self.function)
         for values in self.cases:
             args = [a.evaluate(prog) for a in values[0:-1]]
             result = values[-1].evaluate(prog)
@@ -218,6 +224,23 @@ class TestDef:
                 sys.stdout.write('\nF ')
                 print('%s(%s) != %s(%s)' % (result.__class__.__name__, result
                     , actual.__class__.__name__, actual))
+        print ''
+
+class PureFailureDef(TestDef):
+    "Check that pure function calls raise exceptions"
+    def __init__(self, id, cases):
+        self.function = id
+        self.cases = cases
+
+    def run(self, prog):
+        print "purefailure: %s" % (self.function)
+        for values in self.cases:
+            args = [a.evaluate(prog) for a in values]
+            try:
+                actual = prog.call_function(self.function, args)
+                sys.stdout.write('F')
+            except Exception, e:
+                sys.stdout.write('.')
         print ''
 
 
@@ -286,9 +309,13 @@ def p_stmt_return(p):
     p[0] = ReturnStmt(p[2])
 
 
-def p_topstmt_test(p):
-    'topstmt : TEST ID GIVEN NEWLINE testcases END NEWLINE'
-    p[0] = TestDef(p[2], p[5])
+def p_topstmt_puretest(p):
+    'topstmt : PURETEST ID GIVEN NEWLINE testcases END NEWLINE'
+    p[0] = PureTestDef(p[2], p[5])
+
+def p_topstmt_purefail(p):
+    'topstmt : PUREFAIL ID GIVEN NEWLINE testcases END NEWLINE'
+    p[0] = PureFailureDef(p[2], p[5])
 
 def p_testcases_first(p):
     'testcases : testcase NEWLINE'
@@ -403,8 +430,7 @@ class Program:
 
     def run_tests(self):
         for s in self.prog:
-            if s.__class__ == TestDef:
-                print "run test: %s" % (s.function)
+            if isinstance(s, TestDef):
                 s.run(self)
 
     def _find_function(self, fname):
