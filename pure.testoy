@@ -1,0 +1,16 @@
+func divide(top, bottom)
+    return top / bottom
+end
+
+func main(tacos)
+    x <- divide(15, tacos)
+    y <- x + 7
+    print(y)
+    return y
+end
+
+test divide given
+	8 -> 2 -> 4
+	-10 -> 5 -> 2
+	21 -> -3 -> -7
+end

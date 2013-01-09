@@ -113,6 +113,13 @@ class MultExpr(BinaryExpr):
     def operator_string(self):
         return '*'
 
+class DivideExpr(BinaryExpr):
+    def operate(self, a, b):
+        return a / b
+
+    def operator_string(self):
+        return '/'
+
 class NegativeExpr:
     def __init__(self, op):
         self.x = op
@@ -199,15 +206,18 @@ class TestDef:
         for values in self.cases:
             args = [a.evaluate(prog) for a in values[0:-1]]
             result = values[-1].evaluate(prog)
-            actual = prog.call_function(self.function, args)
+            try:
+                actual = prog.call_function(self.function, args)
+            except Exception, e:
+                sys.stdout.write('E')
+                continue
+
             if result == actual:
                 sys.stdout.write('.')
             else:
-                sys.stdout.write('F')
-                print(' %s = %s' % (result, actual))
-                print(' %s = %s' % (result.__class__.__name__,
-                    actual.__class__.__name__))
-                print "call(%s) = %s" % (str(args), str(actual))
+                sys.stdout.write('\nF ')
+                print('%s(%s) != %s(%s)' % (result.__class__.__name__, result
+                    , actual.__class__.__name__, actual))
         print ''
 
 
@@ -349,8 +359,7 @@ def p_expr_times(p):
 
 def p_expr_divide(p):
     'expr : expr DIVIDE expr'
-    p[0] = p[1] / p[3]
-    print "%d / %d = %d" % (p[1], p[3], p[0])
+    p[0] = DivideExpr(p[1], p[3])
 
 def p_expr_id(p):
     'expr : ID'
@@ -407,8 +416,7 @@ class Program:
         for f in BUILTINS:
             if f.__name__ == builtin_name:
                 return f
-            print "found %s" % f.__name__
-        return None
+        raise Exception("Function doesn't exist: %s" % fname)
 
     def _push_function(self, f, args):
         if args is None:
