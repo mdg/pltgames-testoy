@@ -3,17 +3,18 @@ import ply.yacc as yacc
 import sys
 
 reserved = {
-    'if': 'IF',
     'else': 'ELSE',
     'elsif': 'ELSIF',
     'end': 'END',
-    'failure': 'FAILURE',
-    'foreach': 'FOREACH',
     'func': 'FUNC',
     'given': 'GIVEN',
+    'if': 'IF',
+    'provide': 'PROVIDE',
     'purefail': 'PUREFAIL',
     'puretest': 'PURETEST',
     'return': 'RETURN',
+    'test': 'TEST',
+    'testdata': 'TESTDATA',
     'while': 'WHILE',
 }
 
@@ -26,6 +27,7 @@ tokens = [
     'PARENL',
     'PARENR',
     'COMMA',
+    'EQUAL',
     'PLUS',
     'MINUS',
     'TIMES',
@@ -38,6 +40,7 @@ t_ARROWL = r'<\-'
 t_ARROWR = r'\->'
 t_COMMA = r','
 t_DIVIDE = r'/'
+t_EQUAL = r'='
 t_MINUS = r'\-'
 t_PARENL = r'\('
 t_PARENR = r'\)'
@@ -311,31 +314,50 @@ def p_stmt_return(p):
     p[0] = ReturnStmt(p[2])
 
 
+# Pure Tests
 def p_topstmt_puretest(p):
-    'topstmt : PURETEST ID GIVEN NEWLINE testcases END NEWLINE'
+    'topstmt : PURETEST ID GIVEN NEWLINE puretestcases END NEWLINE'
     p[0] = PureTestDef(p[2], p[5])
 
 def p_topstmt_purefail(p):
-    'topstmt : PUREFAIL ID GIVEN NEWLINE testcases END NEWLINE'
+    'topstmt : PUREFAIL ID GIVEN NEWLINE puretestcases END NEWLINE'
     p[0] = PureFailureDef(p[2], p[5])
 
-def p_testcases_first(p):
-    'testcases : testcase NEWLINE'
+def p_puretestcases_first(p):
+    'puretestcases : puretestcase NEWLINE'
     p[0] = [p[1]]
 
-def p_testcases_more(p):
-    'testcases : testcases testcase NEWLINE'
+def p_puretestcases_more(p):
+    'puretestcases : puretestcases puretestcase NEWLINE'
     p[0] = p[1]
     p[0].append(p[2])
 
-def p_testcase_first(p):
-    'testcase : expr ARROWR expr'
+def p_puretestcase_first(p):
+    'puretestcase : expr ARROWR expr'
     p[0] = [p[1], p[3]]
 
-def p_testcase_more(p):
-    'testcase : testcase ARROWR expr'
+def p_puretestcase_more(p):
+    'puretestcase : puretestcase ARROWR expr'
     p[0] = p[1]
     p[0].append(p[3])
+
+# Regular Tests
+def p_topstmt_testdata(p):
+    'topstmt : TESTDATA ID PROVIDE NEWLINE provisions endblock'
+    p[0] = PureTestDef(p[2], p[5])
+
+def p_provisions_first(p):
+    'provisions : provision NEWLINE'
+    p[0] = [p[1]]
+
+def p_provisions_more(p):
+    'provisions : provisions provision NEWLINE'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+def p_provision_tmp(p):
+    'provision : expr'
+    p[0] = p[1]
 
 
 def p_functioncall(p):
@@ -356,9 +378,14 @@ def p_callargs_more(p):
     p[0] = p[1]
     p[0].append(p[3])
 
+
 def p_empty(p):
     'empty :'
     p[0] = []
+
+def p_endblock(p):
+    'endblock : END NEWLINE'
+    pass
 
 
 def p_expr_negation(p):
@@ -400,6 +427,7 @@ def p_expr_number(p):
 
 def p_error(p):
     print "parse error: %s" % str(p)
+    exit(1)
 
 
 def builtin_print(val):
