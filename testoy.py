@@ -18,6 +18,7 @@ reserved = {
 }
 
 tokens = [
+    'COMMENT',
     'ID',
     'NUMBER',
     'ARROWL',
@@ -59,6 +60,7 @@ def t_NEWLINE(t):
     t.lexer.lineno += len(t.value)
     return t
 
+t_ignore_COMMENT = r'\#\# .*(\r\n|\n|\r)'
 t_ignore = ' \t'
 
 def t_error(t):
