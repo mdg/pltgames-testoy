@@ -19,7 +19,6 @@ reserved = {
 }
 
 tokens = [
-    'COMMENT',
     'ID',
     'NUMBER',
     'ARROWL',
@@ -127,7 +126,14 @@ class DivideExpr(BinaryExpr):
     def operator_string(self):
         return '/'
 
-class NegativeExpr:
+class EqualExpr(BinaryExpr):
+    def operate(self, a, b):
+        return a == b
+
+    def operator_string(self):
+        return '='
+
+class NegativeTerm:
     def __init__(self, op):
         self.x = op
 
@@ -161,17 +167,43 @@ class FunctionDef:
         for i in self.code:
             print "\t%s" % str(i)
 
-class AssignStmt:
-    def __init__(self, id, expr):
-        self.dst = id
+class Assignment:
+    def __init__(self, ids, expr):
+        self.dst = ids
         self.src = expr
+
+    def __repr__(self):
+        return "%s <- %s" % (self.dst, self.src)
+
+class AssignStmt:
+    def __init__(self, assignment):
+        self.dst = assignment.dst
+        self.src = assignment.src
 
     def __repr__(self):
         return "%s <- %s" % (self.dst, self.src)
 
     def execute(self, prog):
         val = self.src.evaluate(prog)
-        prog.set_local(self.dst, val)
+        num_values = len(val)
+        if num_values != len(self.dst):
+            print 'mismatched assignment'
+            exit(1)
+        i = 0
+        while i < num_values:
+            prog.set_local(self.dst[i], val[i])
+            i += 1
+
+class GivenStmt:
+    def __init__(self, assignment):
+        self.dst = assignment.dst
+        self.src = assignment.src
+
+    def __repr__(self):
+        return "given %s <- %s" % (self.dst, self.src)
+
+    def permute(self, cases, prog):
+        return cases
 
 class ReturnStmt:
     def __init__(self, expr):
@@ -180,6 +212,17 @@ class ReturnStmt:
     def execute(self, prog):
         result = self.expr.evaluate(prog)
         prog.set_result(result)
+
+    def __repr__(self):
+        return "return %s" % (self.expr)
+
+class AssertionStmt:
+    def __init__(self, expr):
+        self.expr = expr
+
+    def execute(self, prog):
+        result = self.expr.evaluate(prog)
+        prog.assertion(result)
 
     def __repr__(self):
         return "return %s" % (self.expr)
@@ -248,6 +291,27 @@ class PureFailureDef(TestDef):
                 sys.stdout.write('.')
         print ''
 
+class RegularTestDef(TestDef):
+    def __init__(self, id, givens, code):
+        self.name = id
+        self.givens = givens
+        self.code = code
+
+    def run(self, prog):
+        print "test: %s" % (self.name)
+        cases = []
+        for g in self.givens:
+            cases = g.permute(cases, prog)
+
+        for c in cases:
+            pass
+        print ''
+
+class TestDataDef:
+    def __init__(self, id, provisions):
+        self.name = id
+        self.data = provisions
+
 
 start = 'program'
 
@@ -302,8 +366,8 @@ def p_stmteol(p):
     p[0] = p[1]
 
 def p_stmt_assign(p):
-    'stmt : ID ARROWL expr'
-    p[0] = AssignStmt(p[1], p[3])
+    'stmt : assignment'
+    p[0] = AssignStmt(p[1])
 
 def p_stmt_expr(p):
     'stmt : expr'
@@ -341,10 +405,52 @@ def p_puretestcase_more(p):
     p[0] = p[1]
     p[0].append(p[3])
 
+
 # Regular Tests
+def p_topstmt_test(p):
+    'topstmt : TEST ID NEWLINE optgivens testcode endblock'
+    p[0] = RegularTestDef(p[2], p[4], p[5])
+
+def p_optgivens(p):
+    '''optgivens : givens
+            | empty'''
+    p[0] = p[1]
+
+def p_givens_first(p):
+    'givens : given NEWLINE'
+    p[0] = [p[1]]
+
+def p_givens_more(p):
+    'givens : givens given NEWLINE'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+def p_given(p):
+    'given : GIVEN assignment'
+    p[0] = GivenStmt(p[2])
+
+def p_testcode(p):
+    'testcode : teststmt NEWLINE'
+    p[0] = [p[1]]
+
+def p_testcode_more(p):
+    'testcode : testcode teststmt NEWLINE'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+def p_teststmt_assign(p):
+    'teststmt : assignment'
+    p[0] = AssignStmt(p[1])
+
+def p_teststmt_assertion(p):
+    'teststmt : expr'
+    p[0] = AssertionStmt(p[1])
+
+
+# Provided Test Data
 def p_topstmt_testdata(p):
     'topstmt : TESTDATA ID PROVIDE NEWLINE provisions endblock'
-    p[0] = PureTestDef(p[2], p[5])
+    p[0] = TestDataDef(p[2], p[5])
 
 def p_provisions_first(p):
     'provisions : provision NEWLINE'
@@ -355,9 +461,14 @@ def p_provisions_more(p):
     p[0] = p[1]
     p[0].append(p[2])
 
-def p_provision_tmp(p):
-    'provision : expr'
+def p_provision_first(p):
+    'provision : term'
+    p[0] = [p[1]]
+
+def p_provision_more(p):
+    'provision : provision term'
     p[0] = p[1]
+    p[0].append(p[2])
 
 
 def p_functioncall(p):
@@ -388,11 +499,22 @@ def p_endblock(p):
     pass
 
 
-## Expressions
-def p_expr_negation(p):
-    'expr : MINUS expr'
-    p[0] = NegativeExpr(p[2])
+## Assignment
+def p_assignment(p):
+    'assignment : lhs ARROWL expr'
+    p[0] = Assignment(p[1], p[3])
 
+def p_lhs(p):
+    'lhs : ID'
+    p[0] = [p[1]]
+
+def p_lhs_more(p):
+    'lhs : lhs COMMA ID'
+    p[0] = p[1]
+    p[0].append(p[2])
+
+
+## Expressions
 def p_expr_term(p):
     'expr : term'
     p[0] = p[1]
@@ -414,11 +536,19 @@ def p_expr_divide(p):
     'expr : expr DIVIDE expr'
     p[0] = DivideExpr(p[1], p[3])
 
+def p_expr_equal(p):
+    'expr : expr EQUAL expr'
+    p[0] = EqualExpr(p[1], p[3])
+
 
 ## Terms
 def p_term_parened(p):
     'term : PARENL expr PARENR'
     p[0] = p[2]
+
+def p_term_negation(p):
+    'term : MINUS term'
+    p[0] = NegativeTerm(p[2])
 
 def p_term_functioncall(p):
     'expr : functioncall'
