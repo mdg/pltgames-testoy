@@ -203,7 +203,47 @@ class GivenStmt:
         return "given %s <- %s" % (self.dst, self.src)
 
     def permute(self, cases, prog):
+        values = self.src.evaluate(prog)
+        named_values = self.name_values(self.dst, values)
+        result = self.outer_join(cases, named_values)
+        return result
+
+    @staticmethod
+    def name_values(ids, indexed_values):
+        named = list()
+        id_count = len(ids)
+        for row in indexed_values:
+            rowsize = len(row)
+            if rowsize < id_count:
+                print "not enough values: %s" % row
+                continue
+            elif rowsize > id_count:
+                print "too many values: %s" % row
+                continue
+            i = 0
+            named_row = dict()
+            while i < id_count:
+                named_row[ids[i]] = row[i]
+                i += 1
+            named.append(named_row)
+        return named
+
+    @staticmethod
+    def outer_join(caselist1, caselist2):
+        if len(caselist1) == 0:
+            return caselist2
+        if len(caselist2) == 0:
+            return caselist1
+
+        cases = list()
+        for c1 in caselist1:
+            for c2 in caselist2:
+                newcase = c1
+                for name,value in c2.items():
+                    newcase[name] = value
+                cases.append(newcase)
         return cases
+
 
 class ReturnStmt:
     def __init__(self, expr):
@@ -221,8 +261,8 @@ class AssertionStmt:
         self.expr = expr
 
     def execute(self, prog):
-        result = self.expr.evaluate(prog)
-        prog.assertion(result)
+        success = self.expr.evaluate(prog)
+        prog.assertion(success)
 
     def __repr__(self):
         return "return %s" % (self.expr)
@@ -247,6 +287,14 @@ class FunctionCall:
     def __repr__(self):
         return "FunctionCall"
 
+
+class AssertionFailure(Exception):
+    pass
+
+class NoAssertionFailure(AssertionFailure):
+    pass
+
+
 class TestDef:
     pass
 
@@ -264,6 +312,7 @@ class PureTestDef(TestDef):
                 actual = prog.call_function(self.function, args)
             except Exception, e:
                 sys.stdout.write('E')
+                sys.stderr.write(str(e))
                 continue
 
             if result == actual:
@@ -296,21 +345,39 @@ class RegularTestDef(TestDef):
         self.name = id
         self.givens = givens
         self.code = code
+        self.cases = []
 
     def run(self, prog):
         print "test: %s" % (self.name)
-        cases = []
         for g in self.givens:
-            cases = g.permute(cases, prog)
+            self.cases = g.permute(self.cases, prog)
 
-        for c in cases:
-            pass
-        print ''
+        if len(self.cases) == 0:
+            self.cases = [{}]
+        for c in self.cases:
+            #print "run test: %s w/ %s" % (self.name, c)
+            prog.run_test(self, c)
+            try:
+                sys.stdout.write('.')
+            except AssertionFailure, a:
+                sys.stdout.write('F ')
+                print str(a)
+            except Exception, e:
+                sys.stdout.write('E ')
+                print str(e)
+        sys.stdout.write('\n')
 
 class TestDataDef:
     def __init__(self, id, provisions):
         self.name = id
         self.data = provisions
+
+    def evaluate(self, program):
+        data = list()
+        for row in self.data:
+            data.append([v.evaluate(program) for v in row])
+        return data
+
 
 
 start = 'program'
@@ -511,7 +578,7 @@ def p_lhs(p):
 def p_lhs_more(p):
     'lhs : lhs COMMA ID'
     p[0] = p[1]
-    p[0].append(p[2])
+    p[0].append(p[3])
 
 
 ## Expressions
@@ -574,10 +641,9 @@ BUILTINS = [builtin_print]
 
 
 class CallFrame:
-    def __init__(self, funcdef, args):
+    def __init__(self, funcdef):
         self.name = funcdef.name
         self.code = funcdef.code
-        self.args = args
         self.result = None
         self.locals = dict()
 
@@ -595,21 +661,36 @@ class Program:
         self.callstack.pop(-1)
         return result
 
+    def run_test(self, test, givens):
+        self._assertions = 0
+        self.callstack.append(CallFrame(test))
+        for name,value in givens.items():
+            self.set_local(name, value)
+        result = self._run()
+        self.callstack.pop(-1)
+        if self._assertions == 0:
+            raise NoAssertionException()
+
     def run_tests(self):
         for s in self.prog:
             if isinstance(s, TestDef):
                 s.run(self)
 
     def _find_function(self, fname):
-        for s in self.prog:
-            if s.__class__.__name__ == 'FunctionDef':
-                if s.name == fname:
-                    return s
+        f = self._find_object(FunctionDef, fname)
+        if f:
+            return f
         builtin_name = "builtin_%s" % (fname)
         for f in BUILTINS:
             if f.__name__ == builtin_name:
                 return f
         raise Exception("Function doesn't exist: %s" % fname)
+
+    def _find_object(self, type, name):
+        for o in self.prog:
+            if o.__class__ == type and o.name == name:
+                return o
+        return None
 
     def _push_function(self, f, args):
         if args is None:
@@ -619,7 +700,7 @@ class Program:
             print "function arg mismatch"
             return None
 
-        self.callstack.append(CallFrame(f, args))
+        self.callstack.append(CallFrame(f))
         i = 0
         while i < passed_argc:
             name = f.args[i]
@@ -641,11 +722,23 @@ class Program:
         frame.locals[name] = value
 
     def get(self, name):
+        testdata = self._find_object(TestDataDef, name)
+        if testdata:
+            return testdata.evaluate(self)
+        if len(self.callstack) == 0:
+            print "callstack underflow"
+            exit(-2)
         frame = self.callstack[-1]
         if name not in frame.locals:
             print "var %s is not set in %s" % (name, frame.locals)
             return None
         return frame.locals[name]
+
+    def assertion(self, success):
+        if success:
+            self._assertions += 1
+        else:
+            raise AssertionException()
 
     def print_code(self):
         for s in self.prog:

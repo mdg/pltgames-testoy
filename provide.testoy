@@ -11,14 +11,14 @@ end
 
 
 ## define a set of test data
-testdata twice_testdata provide
-	 8  4
-	-2 -1
+testdata thrice_testdata provide
+	 12  4
+	-3 -1
 	 0  0
 end
 
 ## manually generated test data above
-test provide_twice
-	given expected, input <- twice_testdata
-	expected = twice(input)
+test thrice_provided
+	given expected, input <- thrice_testdata
+	expected = thrice(input)
 end
