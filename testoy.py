@@ -803,14 +803,14 @@ class Program:
 
 def check_args():
     cmd = 'x'
-    if len(sys.argv) == 3 and sys.argv[1] == 'test':
-        cmd = 'test'
+    if len(sys.argv) == 3:
+        cmd = sys.argv[1]
         program_file = sys.argv[2]
     elif len(sys.argv) == 2:
         program_file = sys.argv[1]
     else:
-        print "running internal sample program"
-        program_file = None
+        print "missing program file"
+        exit(-1)
     return (cmd, program_file)
 
 
@@ -826,6 +826,15 @@ def main():
         progcode = parser.parse(input)
         program = Program(progcode)
         program.run_tests()
+    elif program_file is not None and cmd == 'lex':
+        with open(program_file) as f:
+            input = f.read()
+        lex.input(input)
+        while True:
+            tok = lex.token()
+            if not tok:
+                break
+            print tok
     elif program_file is not None:
         parser = yacc.yacc()
         with open(program_file) as f:
@@ -833,23 +842,6 @@ def main():
         progcode = parser.parse(input)
         program = Program(progcode)
         program.call_function('main', [5])
-    elif cmd == 'x':
-        parser = yacc.yacc()
-        progcode = parser.parse(sample1)
-        program = Program(progcode)
-        print program.call_function('main', [5])
-    elif cmd == 'p':
-        parser = yacc.yacc()
-        progcode = parser.parse(sample1)
-        program = Program(progcode)
-        program.print_code()
-    else:
-        lex.input(sample1)
-        while True:
-            tok = lex.token()
-            if not tok:
-                break
-            print tok
 
 if __name__ == '__main__':
     main()
