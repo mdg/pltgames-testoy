@@ -1,6 +1,7 @@
 import ply.lex as lex
 import ply.yacc as yacc
 import sys
+import random
 
 reserved = {
     'else': 'ELSE',
@@ -14,6 +15,7 @@ reserved = {
     'puretest': 'PURETEST',
     'return': 'RETURN',
     'test': 'TEST',
+    'testfunc': 'TESTFUNC',
     'testdata': 'TESTDATA',
     'while': 'WHILE',
 }
@@ -167,6 +169,9 @@ class FunctionDef:
         for i in self.code:
             print "\t%s" % str(i)
 
+class TestFuncDef(FunctionDef):
+    pass
+
 class Assignment:
     def __init__(self, ids, expr):
         self.dst = ids
@@ -185,6 +190,9 @@ class AssignStmt:
 
     def execute(self, prog):
         val = self.src.evaluate(prog)
+        ## cast val to a list if it is not already
+        if not isinstance(val, list):
+            val = [val]
         num_values = len(val)
         if num_values != len(self.dst):
             print 'mismatched assignment'
@@ -213,6 +221,9 @@ class GivenStmt:
         named = list()
         id_count = len(ids)
         for row in indexed_values:
+            if not isinstance(row, list):
+                row = [row]
+
             rowsize = len(row)
             if rowsize < id_count:
                 print "not enough values: %s" % row
@@ -238,7 +249,9 @@ class GivenStmt:
         cases = list()
         for c1 in caselist1:
             for c2 in caselist2:
-                newcase = c1
+                newcase = dict()
+                for name,value in c1.items():
+                    newcase[name] = value
                 for name,value in c2.items():
                     newcase[name] = value
                 cases.append(newcase)
@@ -262,7 +275,10 @@ class AssertionStmt:
 
     def execute(self, prog):
         success = self.expr.evaluate(prog)
-        prog.assertion(success)
+        if success:
+            prog.asserted()
+        else:
+            raise AssertionFailure(str(self.expr))
 
     def __repr__(self):
         return "return %s" % (self.expr)
@@ -285,7 +301,24 @@ class FunctionCall:
         return sum
 
     def __repr__(self):
-        return "FunctionCall"
+        s = self.name
+        first = True
+        for a in self.args:
+            if first:
+                s += "("
+                first = False
+            else:
+                s += ","
+            s += str(a)
+        s += ")"
+        return s
+
+class BuiltinFunction:
+    def __init__(self, f):
+        self.func = f
+
+    def evaluate(self, prog):
+        return self.func
 
 
 class AssertionFailure(Exception):
@@ -356,15 +389,13 @@ class RegularTestDef(TestDef):
             self.cases = [{}]
         for c in self.cases:
             #print "run test: %s w/ %s" % (self.name, c)
-            prog.run_test(self, c)
             try:
+                prog.run_test(self, c)
                 sys.stdout.write('.')
             except AssertionFailure, a:
-                sys.stdout.write('F ')
-                print str(a)
+                print "F %s for %s" % (a, c)
             except Exception, e:
-                sys.stdout.write('E ')
-                print str(e)
+                print "E %s for %s" % (e, c)
         sys.stdout.write('\n')
 
 class TestDataDef:
@@ -404,6 +435,10 @@ def p_topstmts_more(p):
 def p_topstmt_func(p):
     'topstmt : FUNC ID PARENL optfuncargs PARENR NEWLINE code END NEWLINE'
     p[0] = FunctionDef(p[2], p[4], p[7])
+
+def p_topstmt_testfunc(p):
+    'topstmt : TESTFUNC ID PARENL optfuncargs PARENR NEWLINE code END NEWLINE'
+    p[0] = TestFuncDef(p[2], p[4], p[7])
 
 def p_optfuncargs(p):
     '''optfuncargs : funcargs
@@ -634,10 +669,23 @@ def p_error(p):
     exit(1)
 
 
+def builtin_generate(cnt, f):
+    result = []
+    while (cnt > 0):
+        result.append(f())
+        cnt -= 1
+    return result
+
 def builtin_print(val):
     print val
 
-BUILTINS = [builtin_print]
+def builtin_random_int():
+    return random.randint(-100, 100)
+
+
+
+class CallstackUnderflow(Exception):
+    pass
 
 
 class CallFrame:
@@ -654,8 +702,8 @@ class Program:
 
     def call_function(self, fname, args):
         f = self._find_function(fname)
-        if f.__class__.__name__ == 'function':
-            return f(*args)
+        if f.__class__ == BuiltinFunction:
+            return f.func(*args)
         self._push_function(f, args)
         result = self._run()
         self.callstack.pop(-1)
@@ -669,7 +717,7 @@ class Program:
         result = self._run()
         self.callstack.pop(-1)
         if self._assertions == 0:
-            raise NoAssertionException()
+            raise NoAssertionFailure()
 
     def run_tests(self):
         for s in self.prog:
@@ -677,19 +725,24 @@ class Program:
                 s.run(self)
 
     def _find_function(self, fname):
-        f = self._find_object(FunctionDef, fname)
-        if f:
-            return f
-        builtin_name = "builtin_%s" % (fname)
-        for f in BUILTINS:
-            if f.__name__ == builtin_name:
-                return f
-        raise Exception("Function doesn't exist: %s" % fname)
+        f = self._find_object(fname)
+        if f is None:
+            raise Exception("Function doesn't exist: %s" % fname)
+        return f
 
-    def _find_object(self, type, name):
+    def _find_object(self, name):
         for o in self.prog:
-            if o.__class__ == type and o.name == name:
+            if o.name == name:
                 return o
+
+        builtin_name = "builtin_%s" % (name)
+        globs = self._find_object.__func__.func_globals
+        if builtin_name in globs:
+            f = globs[builtin_name]
+            if f.__class__.__name__ != 'function':
+                return None
+            return BuiltinFunction(f)
+
         return None
 
     def _push_function(self, f, args):
@@ -722,23 +775,22 @@ class Program:
         frame.locals[name] = value
 
     def get(self, name):
-        testdata = self._find_object(TestDataDef, name)
-        if testdata:
-            return testdata.evaluate(self)
+        object = self._find_object(name)
+        if object:
+            return object.evaluate(self)
+
         if len(self.callstack) == 0:
-            print "callstack underflow"
-            exit(-2)
+            print "callstack underflow: %s" % name
+            raise CallstackUnderflow(name)
+
         frame = self.callstack[-1]
         if name not in frame.locals:
             print "var %s is not set in %s" % (name, frame.locals)
             return None
         return frame.locals[name]
 
-    def assertion(self, success):
-        if success:
-            self._assertions += 1
-        else:
-            raise AssertionException()
+    def asserted(self):
+        self._assertions += 1
 
     def print_code(self):
         for s in self.prog:
@@ -748,48 +800,56 @@ class Program:
                 print "Unknown Statement: %s" % str(s)
 
 
-lex.lex()
+
+def check_args():
+    cmd = 'x'
+    if len(sys.argv) == 3 and sys.argv[1] == 'test':
+        cmd = 'test'
+        program_file = sys.argv[2]
+    elif len(sys.argv) == 2:
+        program_file = sys.argv[1]
+    else:
+        print "running internal sample program"
+        program_file = None
+    return (cmd, program_file)
 
 
-cmd = 'x'
-if len(sys.argv) == 3 and sys.argv[1] == 'test':
-    cmd = 'test'
-    program_file = sys.argv[2]
-elif len(sys.argv) == 2:
-    program_file = sys.argv[1]
-else:
-    print "running internal sample program"
-    program_file = None
+def main():
+    lex.lex()
 
+    cmd, program_file = check_args()
 
-if program_file is not None and cmd == 'test':
-    parser = yacc.yacc()
-    with open(program_file) as f:
-        input = f.read()
-    progcode = parser.parse(input)
-    program = Program(progcode)
-    program.run_tests()
-elif program_file is not None:
-    parser = yacc.yacc()
-    with open(program_file) as f:
-        input = f.read()
-    progcode = parser.parse(input)
-    program = Program(progcode)
-    program.call_function('main', [5])
-elif cmd == 'x':
-    parser = yacc.yacc()
-    progcode = parser.parse(sample1)
-    program = Program(progcode)
-    print program.call_function('main', [5])
-elif cmd == 'p':
-    parser = yacc.yacc()
-    progcode = parser.parse(sample1)
-    program = Program(progcode)
-    program.print_code()
-else:
-    lex.input(sample1)
-    while True:
-        tok = lex.token()
-        if not tok:
-            break
-        print tok
+    if program_file is not None and cmd == 'test':
+        parser = yacc.yacc()
+        with open(program_file) as f:
+            input = f.read()
+        progcode = parser.parse(input)
+        program = Program(progcode)
+        program.run_tests()
+    elif program_file is not None:
+        parser = yacc.yacc()
+        with open(program_file) as f:
+            input = f.read()
+        progcode = parser.parse(input)
+        program = Program(progcode)
+        program.call_function('main', [5])
+    elif cmd == 'x':
+        parser = yacc.yacc()
+        progcode = parser.parse(sample1)
+        program = Program(progcode)
+        print program.call_function('main', [5])
+    elif cmd == 'p':
+        parser = yacc.yacc()
+        progcode = parser.parse(sample1)
+        program = Program(progcode)
+        program.print_code()
+    else:
+        lex.input(sample1)
+        while True:
+            tok = lex.token()
+            if not tok:
+                break
+            print tok
+
+if __name__ == '__main__':
+    main()

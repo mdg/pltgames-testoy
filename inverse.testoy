@@ -1,0 +1,21 @@
+func divide(a, b)
+    return a / b
+end
+
+func main(tacos)
+    x <- divide(25, tacos)
+    return x + 4
+end
+
+testfunc multiply(a, b)
+	return a * b
+end
+
+## get a result and test that it is the inverse of of a test function
+test multiply_inverse_divide
+	given x <- generate(10, random_int)
+	given y <- generate(10, random_int)
+	z <- multiply(x, y)
+	y = divide(z, x)
+	x = divide(z, y)
+end

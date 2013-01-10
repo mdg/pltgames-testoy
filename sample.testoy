@@ -26,29 +26,3 @@ test product
 	given b <- range(-10, 10)
 	a * b = product(a, b)
 end
-
-// given two function names, execute them sequentially on the given input
-// and verify that the original result is the same
-test multiply_inverse_divide
-	given x <- repeat(10, random, -100, 100)
-	given y <- repeat(10, random, -100, 100)
-	given z <- repeat(10, random, -100, 100)
-	z = multiply(x, y)
-	y = divide(z, x)
-	z = divide(z, y)
-end
-
-test twice_layout "actually doubles?"
-    y <- twice(7)
-    14 = y
-end
-
-test twice(expected, input)
-    actual <- twice(input)
-    expected = actual
-withdata
-7 14
--5 -10
-8 16
-end
-
