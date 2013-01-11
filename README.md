@@ -3,19 +3,24 @@ Testoy the PLT Games Programming Language
 ============
 
 Testoy is a programming language created as an entry to the PLT Games
+
 http://www.pltgames.com/competition/2013/1
+
 It is not meant to be used, except as a demonstration of features that
 might be added to other, more complete languages.
 
 The code part of Testoy is fairly generic, functions are defined much as
 in other languages.
 
+```
 func main()
+    ## This is a comment
     x <- 5
     y <- x + 7
     print(y)
     return y
 end
+```
 
 
 Novelty
@@ -32,7 +37,10 @@ to read and write.
 Pure Function Tests
 ------
 
-Testing pure functions is the simplest example. Imagine that we want to test
+Testing pure functions is the simplest kind of test. A function takes in
+some data and has output. Testoy has direct support for this.
+
+Imagine that we want to test
 a function that takes 2 parameters and simply divides one by the other.
 
 ```
@@ -42,8 +50,9 @@ end
 ```
 
 We know the basic inputs and outputs to test this function, and we just want
-to tell Testoy what they are with the puretest given syntax. Each line in the
-puretest represents the inputs and output from the divide function.
+to tell Testoy what they are with the `puretest ... given` syntax.
+Each line in the
+pure test represents the inputs and output from the divide function.
 When 8 and 2 are passed to divide, the result is 4. Likewise for the remaining
 lines in the given data.
 
@@ -59,7 +68,7 @@ end
 Manual Test Sets
 ------
 
-Testoy provides syntactic sugar for definiting manual test sets.
+Testoy provides syntactic sugar for definiting manual test data sets.
 
 In this example, we want to test the thrice function.
 
@@ -97,8 +106,8 @@ Consider again the `divide` function from above. We want to test it with
 an inverse function to make sure it's working. However, we don't want that
 inverse function showing up in the actual code.
 
-The testfunc syntax will do this. It's exactly like regular function
-definitions, but the testfunc will not be available except when running in
+The `testfunc` syntax will do this. It's exactly like regular function
+definitions, but the `testfunc` will not be available except when running in
 the test context.
 
 ```
@@ -110,7 +119,7 @@ end
 Given
 ------
 
-The given keyword was already used when loading a test data set in the
+The `given` keyword was already used when loading a test data set in the
 example above. Tests can start off with any number of given statements
 for setting test data. For the first given statement, a test case is
 created for each row of data in the list. For subsquent given statements
