@@ -26,7 +26,7 @@ end
 Novelty
 =========
 
-The part of Testoy that is meant to be novel is it's features around testing.
+The parts of Testoy that are meant to be novel are it's features for testing.
 Testoy implements four special test-specific syntaxes to make tests easier
 to read and write.
 * Pure Function Tests
@@ -129,6 +129,10 @@ statement, as in an outer join.
 In this example, x and y are each assigned a list of 10 random integers. The
 test will be executed once for each combination of x and y, resulting in
 100 tests being run in total.
+
+Within tests, assertion is implied, so they are made simply by stating
+an expression that should be true. `a = b` will cause the test to fail
+if a does not equal b.
 
 ```
 ## get a result and test that it is the inverse of of a test function
