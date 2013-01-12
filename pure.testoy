@@ -2,6 +2,10 @@ func divide(top, bottom)
     return top / bottom
 end
 
+func append(first, second)
+    return first + second
+end
+
 func main(tacos)
     x <- divide(15, tacos)
     y <- x + 7
@@ -18,4 +22,8 @@ end
 purefail divide given
 	8 -> 0
 	-23 -> 0
+end
+
+puretest append given
+	"tacos" -> " and burritos" -> "tacos and burritos"
 end

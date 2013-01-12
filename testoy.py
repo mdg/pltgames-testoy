@@ -3,6 +3,12 @@ import ply.yacc as yacc
 import sys
 import random
 
+STR_LITERAL = ''
+
+states = (
+    ('str', 'exclusive'),
+)
+
 reserved = {
     'else': 'ELSE',
     'elsif': 'ELSIF',
@@ -34,6 +40,7 @@ tokens = [
     'TIMES',
     'DIVIDE',
     'NEWLINE',
+    'STRLIT',
 ] + list(reserved.values())
 
 
@@ -64,10 +71,37 @@ def t_NEWLINE(t):
     t.lexer.lineno += len(t.value)
     return t
 
+def t_DBLQUOTE(t):
+    r'"'
+    t.lexer.begin('str')
+    global STR_LITERAL
+    STR_LITERAL = ''
+    return None
+
+
 t_ignore_COMMENT = r'\#\# .*(\r\n|\n|\r)'
 t_ignore = ' \t'
 
 def t_error(t):
+    print "Illegal character '%s'" % t.value[0]
+    t.lexer.skip(1)
+
+
+def t_str_DBLQUOTE(t):
+    r'"'
+    t.lexer.begin('INITIAL')
+    t.value = STR_LITERAL
+    t.type = 'STRLIT'
+    return t
+
+def t_str_TEXT(t):
+    r'[^"\\]+'
+    global STR_LITERAL
+    STR_LITERAL += t.value
+    return None
+
+t_str_ignore = ''
+def t_str_error(t):
     print "Illegal character '%s'" % t.value[0]
     t.lexer.skip(1)
 
@@ -91,6 +125,16 @@ class ConstIntExpr:
 
     def __repr__(self):
         return str(self.value)
+
+class StrLitExpr:
+    def __init__(self, val):
+        self.value = val
+
+    def evaluate(self, prog):
+        return self.value
+
+    def __repr__(self):
+        return '"%s"' % self.value
 
 class BinaryExpr:
     def __init__(self, op1, op2):
@@ -664,6 +708,10 @@ def p_term_number(p):
     'term : NUMBER'
     p[0] = ConstIntExpr(p[1])
 
+def p_term_strlit(p):
+    'term : STRLIT'
+    p[0] = StrLitExpr(p[1])
+
 def p_error(p):
     print "parse error: %s" % str(p)
     exit(1)
@@ -730,8 +778,14 @@ class Program:
             raise Exception("Function doesn't exist: %s" % fname)
         return f
 
-    def _find_object(self, name):
+    def _find_object(self, name, type=None):
+        if type is not None and not isinstance(type, string):
+            type = type.__name__
         for o in self.prog:
+            if type is not None and o.__class__.__name != type:
+                continue
+            if not hasattr(o, 'name'):
+                continue
             if o.name == name:
                 return o
 
@@ -774,8 +828,8 @@ class Program:
         frame = self.callstack[-1]
         frame.locals[name] = value
 
-    def get(self, name):
-        object = self._find_object(name)
+    def get(self, name, type=None):
+        object = self._find_object(name, type)
         if object:
             return object.evaluate(self)
 
