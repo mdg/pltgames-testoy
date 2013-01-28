@@ -26,13 +26,14 @@ end
 Novelty
 =========
 
-The parts of Testoy that are meant to be novel are it's features for testing.
+The parts of Testoy that are meant to be novel are its features for testing.
 Testoy implements four special test-specific syntaxes to make tests easier
 to read and write.
 * Pure Function Tests
 * Manual Test Sets
 * Given Statements
 * Test Functions
+* Test Patches (not implemented)
 
 Pure Function Tests
 ------
@@ -147,5 +148,46 @@ test multiply_inverse_divide
 	## if they do not evaluate to true, the test will fail
 	y = divide(z, x)
 	x = divide(z, y)
+end
+```
+
+Test Patches (not implemented)
+-------------
+
+Sometimes, in the course of testing, a function may be called expecting the
+system to be in a particular state. Since it is in the test context, this
+state may not be correctly initialized and executing the function will fail.
+One solution for this is to use
+[Mocks](http://en.wikipedia.org/wiki/Mock_object).
+
+Testoy addresses this with the `patch` statement used for overriding
+existing functions within tests.
+
+```
+test time_difference_function_test
+	patch time() -> 1000
+	patch time() -> 1005
+	## subsequent calls to time() will return 1000 and then 1005
+	##
+	## the tested function should return the difference between 2 calls
+	## to time. given the data above should be 5
+	result <- time_difference_function()
+	5 = result
+end
+
+test product_comparison
+	x <- create_product(1001, "Brand X TV")
+	y <- create_product(1002, "Brand Y TV")
+
+	## patch can also be used in conjunction with parameters
+	## calls to find_product_by_id for each ID will return the given value
+	## Calls with other parameters will be unaffected
+	patch find_product_by_id(1001) -> x
+	patch find_product_by_id(1002) -> y
+
+	## find_products_to_compare calls find_product_by_id
+	result <- find_products_to_compare(1001, 1002)
+	1001 = product_id(first_product(result))
+	1002 = product_id(second_product(result))
 end
 ```
